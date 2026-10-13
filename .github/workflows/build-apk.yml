@@ -1,1 +1,51 @@
+name: S-Chat APK derle
 
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Web dosyalarini hazirla
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
+
+      - name: Paketleri kur
+        run: npm install
+
+      - name: Android projesini olustur
+        run: npx cap add android
+
+      - name: Simgeleri yerlestir
+        run: |
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          unzip -o icons.zip -d android/app/src/main/res/
+
+      - name: Senkronla
+        run: npx cap sync android
+
+      - name: APK derle
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: S-Chat-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
