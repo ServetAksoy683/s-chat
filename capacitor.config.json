@@ -1,0 +1,8 @@
+{
+  "appId": "com.schat.app",
+  "appName": "S-Chat",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
