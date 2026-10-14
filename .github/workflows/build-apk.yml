@@ -31,6 +31,10 @@ jobs:
       - name: Android projesini olustur
         run: npx cap add android
 
+      - name: Izinleri ekle (mikrofon ve kamera)
+        run: |
+          sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application#' android/app/src/main/AndroidManifest.xml
+
       - name: Simgeleri yerlestir
         run: |
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
