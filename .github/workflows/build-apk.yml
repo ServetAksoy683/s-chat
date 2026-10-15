@@ -26,22 +26,39 @@ jobs:
           cp index.html www/index.html
 
       - name: Paketleri kur
-        run: npm install
+        run: |
+          npm install
+          npm install @capacitor/app@6 @capacitor/local-notifications@6
+
+      - name: Push bildirimi eklentisi (google-services.json varsa)
+        run: |
+          if [ -f google-services.json ]; then
+            npm install @capacitor/push-notifications@6
+            echo "PUSH_ENABLED=1" >> $GITHUB_ENV
+          fi
 
       - name: Android projesini olustur
         run: npx cap add android
 
-      - name: Izinleri ekle (mikrofon ve kamera)
+      - name: Izinleri ekle (mikrofon, kamera, bildirim)
         run: |
-          sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application#' android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application#' android/app/src/main/AndroidManifest.xml
 
       - name: Simgeleri yerlestir
         run: |
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
           unzip -o icons.zip -d android/app/src/main/res/
+          mkdir -p android/app/src/main/res/drawable
+          echo "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" | base64 -d > android/app/src/main/res/drawable/ic_stat_schat.png
+          if [ -f google-services.json ]; then cp google-services.json android/app/google-services.json; fi
 
       - name: Senkronla
         run: npx cap sync android
+
+      - name: Sabit imza anahtarini yerlestir
+        run: |
+          mkdir -p ~/.android
+          echo "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" | base64 -d > ~/.android/debug.keystore
 
       - name: APK derle
         working-directory: android
