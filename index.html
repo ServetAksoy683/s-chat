@@ -319,6 +319,10 @@ button:active:not(:disabled),.urow:active,.row:active,.t:active,.it:active,.chip
 .egrid button{font-size:28px;padding:6px}
 .tbox{display:block;width:calc(100% - 36px);margin:8px 18px;min-height:90px;border:1px solid var(--bd);border-radius:10px;background:var(--bg2);padding:10px;font-size:18px;outline:none;resize:none}
 .smusic{position:absolute;left:12px;top:calc(62px + env(safe-area-inset-top,0px));z-index:3;background:#000a;padding:3px 10px;border-radius:12px;font-size:12px}
+
+.nbanner{position:fixed;top:calc(8px + env(safe-area-inset-top,0px));left:50%;transform:translate(-50%,-140%);width:min(94vw,440px);background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:14px;padding:10px 14px;box-shadow:0 6px 24px #0005;z-index:150;display:flex;flex-direction:column;gap:2px;cursor:pointer;transition:transform .32s cubic-bezier(.2,.8,.3,1)}
+.nbanner.in{transform:translate(-50%,0)}
+.nbanner span{color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -434,7 +438,7 @@ function av(u,s){const h=hstr(u.uid||u.username||'x')%360,c=u.avatar?`<img src="
 function avd(u,s,on){return`<div style="position:relative;flex:none;width:${s}px;height:${s}px">${av(u,s)}${on?'<i class="odot"></i>':''}</div>`}
 let tT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('on'),2600)}
 function fail(e){console.error(e);const c=(e&&e.code)||'';toast(c==='permission-denied'?'İzin reddedildi: Firestore kurallarını kontrol et':c==='unavailable'?'Bağlantı yok':'Bir hata oluştu')}
-function layer(html,cls=''){const l=document.createElement('div');l.className='layer '+cls;l.innerHTML=html;$('#ov').appendChild(l);l.remove=function(){Element.prototype.remove.call(l)};pushNav({k:'l',el:l});return l}
+function layer(html,cls=''){const l=document.createElement('div');l.className='layer '+cls;l.innerHTML=html;$('#ov').appendChild(l);l.remove=function(){Element.prototype.remove.call(l);if(NATIVE){const i=NAV.findIndex(e=>e.el===l);if(i>=0)NAV.splice(i,1)}};pushNav({k:'l',el:l});return l}
 function sheet(html){const l=layer(`<div class="bk"></div><div class="sh2">${html}</div>`,'sheetL');$('.bk',l).onclick=()=>l.remove();return l}
 const closeSheets=()=>$$('.sheetL').forEach(x=>x.remove());
 function pick(cb,accept){const f=$('#fi');f.accept=accept||'image/*';f.value='';f.onchange=()=>{if(f.files[0])cb(f.files[0])};f.click()}
@@ -471,19 +475,19 @@ async function enter(u){
   let d=await db.collection('users').doc(UID).get();
   if(!d.exists){const un=(u.email||'kullanici').split('@')[0].toLowerCase().replace(/[^a-z0-9._]/g,'').slice(0,20)||'kullanici';await db.collection('users').doc(UID).set({uid:UID,username:un,name:un,bio:'',avatar:null,following:[],saved:[],priv:{last:true,seen:true},ts:Date.now()});d=await db.collection('users').doc(UID).get()}
   UC[UID]=Object.assign({uid:UID},d.data());
-  listen();startPresence();startCallListener();
+  listen();startPresence();startCallListener();saveToken();
   $('#au').classList.remove('on');startApp();
  }catch(x){UID=null;console.error(x);showAuth();$('#er').textContent=authMsg(x)}}
 function teardown(){try{cleanupCall(false)}catch(e){}try{hideIncoming()}catch(e){}unsubs.forEach(f=>{try{f()}catch(e){}});unsubs=[];chatSub&&chatSub.off&&chatSub.off();chatSub=null;try{rtdb.ref('.info/connected').off();rtdb.ref('status').off()}catch(e){}UID=null;POSTS.length=0;STORY.length=0;CHATS.length=0;for(const k in UC)delete UC[k];for(const k in MSGS)delete MSGS[k]}
-async function logout(){closeSheets();try{if(UID)await rtdb.ref('status/'+UID).set({state:'offline',last:SRV()})}catch(e){}teardown();try{await auth.signOut()}catch(e){}showAuth()}
+async function logout(){closeSheets();try{if(UID&&MYTOKEN)await db.collection('users').doc(UID).update({fcmTokens:FV.arrayRemove(MYTOKEN)})}catch(e){}try{if(UID)await rtdb.ref('status/'+UID).set({state:'offline',last:SRV()})}catch(e){}teardown();try{await auth.signOut()}catch(e){}showAuth()}
 
 /* ---------- canlı dinleyiciler ---------- */
 const errL=e=>fail(e);
 function listen(){
- unsubs.push(db.collection('users').limit(300).onSnapshot(s=>{s.docs.forEach(d=>{UC[d.id]=Object.assign({uid:d.id},d.data())});refresh()},errL));
- unsubs.push(db.collection('posts').orderBy('ts','desc').limit(80).onSnapshot(s=>{POSTS.length=0;s.docs.forEach(d=>POSTS.push(Object.assign({id:d.id},d.data())));refresh()},errL));
+ unsubs.push(db.collection('users').limit(300).onSnapshot(s=>{s.docs.forEach(d=>{UC[d.id]=Object.assign({uid:d.id},d.data())});onUsers();refresh()},errL));
+ unsubs.push(db.collection('posts').orderBy('ts','desc').limit(80).onSnapshot(s=>{POSTS.length=0;s.docs.forEach(d=>POSTS.push(Object.assign({id:d.id},d.data())));onPosts();refresh()},errL));
  unsubs.push(db.collection('stories').where('ts','>',Date.now()-864e5).orderBy('ts','desc').limit(100).onSnapshot(s=>{STORY.length=0;s.docs.forEach(d=>STORY.push(Object.assign({id:d.id},d.data())));refresh()},errL));
- unsubs.push(db.collection('chats').where('members','array-contains',UID).onSnapshot(s=>{CHATS.length=0;s.docs.forEach(d=>CHATS.push(Object.assign({id:d.id},d.data())));CHATS.sort((a,b)=>(b.lastTs||0)-(a.lastTs||0));refresh()},errL))}
+ unsubs.push(db.collection('chats').where('members','array-contains',UID).onSnapshot(s=>{CHATS.length=0;s.docs.forEach(d=>CHATS.push(Object.assign({id:d.id},d.data())));CHATS.sort((a,b)=>(b.lastTs||0)-(a.lastTs||0));onChats(s);refresh()},errL))}
 let connected=false;
 function applyPresence(){if(!UID||!connected)return;const hide=PRV().last===false,ref=rtdb.ref('status/'+UID);ref.onDisconnect().set({state:hide?'hidden':'offline',last:SRV()}).then(()=>ref.set({state:hide?'hidden':(document.hidden?'offline':'online'),last:SRV()})).catch(()=>{})}
 function startPresence(){
@@ -496,7 +500,7 @@ const isOn=id=>PRV().last!==false&&STATUS[id]&&STATUS[id].state==='online';
 /* ---------- yönlendirme ---------- */
 let route={t:'home'};const hist=[];let lastSig='',rq=0;
 function go(r){pushNav({k:'r',prev:route});route=r;lastSig='';render(true);scrollTo(0,0)}
-function back(){if(NAV.length)history.back();else tab('home')}
+function back(){if(NATIVE){const e=NAV[NAV.length-1];if(e&&e.k==='r'){NAV.pop();route=e.prev;lastSig='';render(true);return}}if(NAV.length)history.back();else tab('home')}
 function tab(t){
  closeSheets();
  if(t==='home'){const n=NAV.length;if(n){NAV.length=0;popSilent++;history.go(-n)}route={t:'home'};lastSig='';render(true);scrollTo(0,0);return}
@@ -1011,7 +1015,7 @@ function startCallListener(){
    if(ch.type==='added'){if(Date.now()-d.ts>60000)return;if(CALL||INC){db.collection('calls').doc(ch.doc.id).update({state:'busy'}).catch(()=>{});return}showIncoming(ch.doc.id,d)}
    else if(ch.type==='removed'&&INC&&INC.id===ch.doc.id)hideIncoming()})},errL))}
 function showIncoming(id,d){
- const u=usr(d.caller);INC={id,d};ringStart();
+ const u=usr(d.caller);INC={id,d};ringStart();if(document.hidden)pushLocal(u.username+' seni arıyor',d.video?'Görüntülü arama':'Sesli arama',{});
  INC.layer=layer(`<div class="callbox"><div class="cinfo"><div class="cav">${av(u,110)}</div><b>${esc(u.username)}${vb(u)}</b><span>${d.video?'Görüntülü arama':'Sesli arama'}…</span></div><div class="cctl"><button class="cend" data-act="cdec" aria-label="Reddet">${I.phone}</button><button class="cacc" data-act="cacc" aria-label="Cevapla">${I.phone}</button></div></div>`,'callL')}
 function hideIncoming(){ringStop();if(INC){try{INC.layer.remove()}catch(e){}INC=null}}
 function declineCall(){const inc=INC;if(!inc)return;hideIncoming();db.collection('calls').doc(inc.id).update({state:'declined'}).catch(()=>{})}
@@ -1052,12 +1056,88 @@ document.addEventListener('click',e=>{
   case'cacc':acceptCall();break;case'cdec':declineCall();break;
  }});
 
+/* ================= v3: geri tuşu (Android) ve bildirimler ================= */
+const NATIVE=!!(window.Capacitor&&typeof Capacitor.isNativePlatform==='function'&&Capacitor.isNativePlatform());
+const CPL=(window.Capacitor&&Capacitor.Plugins)||{};
+const CAPP=CPL.App,LNP=CPL.LocalNotifications,PNP=CPL.PushNotifications;
+function handleBack(){
+ if(CALL||INC)return;
+ const top=$('#ov').lastElementChild;
+ if(top){if(typeof SV!=='undefined'&&SV&&SV.l===top)closeStory();else top.remove();return}
+ const e=NAV[NAV.length-1];
+ if(e&&e.k==='r'){NAV.pop();route=e.prev;lastSig='';render(true);return}
+ if(route.t!=='home'){tab('home');return}
+ try{CAPP&&CAPP.exitApp()}catch(x){}}
+if(NATIVE&&CAPP&&CAPP.addListener){try{CAPP.addListener('backButton',handleBack)}catch(e){console.warn(e)}}
+
+let PUSH_ON=false,MYTOKEN=null,PENDING_CHAT=null,notifInit=false;
+const ICON_URL=(document.querySelector('link[rel=icon]')||{}).href||'';
+function openChatById(id){
+ const c=CHATS.find(x=>x.id===id);if(!c){PENDING_CHAT=id;return}
+ PENDING_CHAT=null;closeSheets();
+ if(route.t==='chat'&&route.id===id)return;
+ go({t:'chat',id,peer:c.isGroup?undefined:peerOf(c)})}
+function openPending(){if(PENDING_CHAT&&UID)openChatById(PENDING_CHAT)}
+function banner(title,body,extra){
+ const b=document.createElement('div');b.className='nbanner';b.innerHTML=`<b>${esc(title)}</b><span>${esc(body)}</span>`;
+ b.onclick=()=>{b.remove();if(extra&&extra.chat)openChatById(extra.chat)};document.body.appendChild(b);
+ setTimeout(()=>b.classList.add('in'),20);setTimeout(()=>{b.classList.remove('in');setTimeout(()=>b.remove(),350)},4200);
+ try{navigator.vibrate&&navigator.vibrate(80)}catch(e){}}
+function pushLocal(title,body,extra){
+ if(NATIVE&&LNP){LNP.schedule({notifications:[{id:Math.floor(Math.random()*2e9),title,body,channelId:'messages',smallIcon:'ic_stat_schat',extra:extra||{}}]}).catch(e=>console.warn(e))}
+ else if(window.Notification&&Notification.permission==='granted'){try{const n=new Notification(title,{body,icon:ICON_URL,tag:extra&&extra.chat||undefined});n.onclick=()=>{try{window.focus()}catch(e){}if(extra&&extra.chat)openChatById(extra.chat);n.close()}}catch(e){}}}
+function notifyEvt(title,body,extra,isMsg){
+ if(!document.hidden){banner(title,body,extra);return}
+ if(isMsg&&PUSH_ON)return;
+ pushLocal(title,body,extra)}
+async function saveToken(){if(UID&&MYTOKEN)try{await db.collection('users').doc(UID).update({fcmTokens:FV.arrayUnion(MYTOKEN)})}catch(e){}}
+async function initNotifications(){
+ if(notifInit)return;notifInit=true;
+ try{
+  if(NATIVE&&LNP){
+   let p=await LNP.checkPermissions();if(p.display!=='granted')p=await LNP.requestPermissions();
+   try{await LNP.createChannel({id:'messages',name:'Mesajlar',description:'Mesaj, arama ve etkinlik bildirimleri',importance:4,visibility:1,vibration:true})}catch(e){}
+   LNP.addListener('localNotificationActionPerformed',a=>{const ex=a&&a.notification&&a.notification.extra;if(ex&&ex.chat)openChatById(ex.chat)})}
+  else if(window.Notification&&Notification.permission==='default'){Notification.requestPermission().catch(()=>{})}
+  if(NATIVE&&PNP){
+   const r=await PNP.checkPermissions().then(p=>p.receive==='granted'?p:PNP.requestPermissions());
+   if(r.receive==='granted'){
+    PNP.addListener('registration',t=>{MYTOKEN=t.value;PUSH_ON=true;saveToken()});
+    PNP.addListener('registrationError',e=>console.warn('push',e));
+    PNP.addListener('pushNotificationActionPerformed',a=>{const d=a&&a.notification&&a.notification.data;if(d&&d.chat)openChatById(d.chat)});
+    await PNP.register()}}
+ }catch(e){console.warn('bildirim',e)}}
+const NT={users:false,posts:false,chats:false,fol:new Set(),pp:{},cl:{}};
+function onUsers(){
+ const cur=new Set(Object.values(UC).filter(x=>x.uid!==UID&&(x.following||[]).includes(UID)).map(x=>x.uid));
+ if(NT.users)cur.forEach(id=>{if(!NT.fol.has(id))notifyEvt(usr(id).username,'seni takip etmeye başladı.',{})});
+ NT.fol=cur;NT.users=true}
+function onPosts(){
+ POSTS.filter(p=>p.uid===UID).forEach(p=>{
+  const l=(p.likedBy||[]).filter(x=>x!==UID),c=(p.cmts||[]).filter(x=>x.u!==UID),pv=NT.pp[p.id];
+  if(NT.posts&&pv){
+   if(l.length>pv.l)notifyEvt(usr(l[l.length-1]).username,'gönderini beğendi.',{});
+   if(c.length>pv.c){const lc=c[c.length-1];notifyEvt(usr(lc.u).username,'yorum yaptı: '+lc.t,{})}}
+  NT.pp[p.id]={l:l.length,c:c.length}});
+ NT.posts=true}
+function onChats(s){
+ if(!NT.chats){CHATS.forEach(c=>{NT.cl[c.id]=c.lastTs||0});NT.chats=true;openPending();return}
+ s.docChanges().forEach(ch=>{
+  if(ch.type==='removed')return;
+  const c=CHATS.find(x=>x.id===ch.doc.id);if(!c||!c.lastMsg)return;
+  const lm=c.lastMsg,ts=c.lastTs||0;if(ts<=(NT.cl[c.id]||0))return;NT.cl[c.id]=ts;
+  if(lm.sender===UID||lm.sender==='sys')return;
+  if(route.t==='chat'&&route.id===c.id&&!document.hidden)return;
+  const u=usr(lm.sender);
+  notifyEvt(c.isGroup?(c.name||'Grup'):u.username,(c.isGroup?u.username+': ':'')+lm.t,{chat:c.id},true)});
+ openPending()}
+
 /* ---------- açılış ---------- */
 (async function(){
  setMode('r');applyTheme();
  $('#sp').classList.add('on');await sl(400);$('#sp').classList.add('a');
  const u=await Promise.all([first,sl(3400)]).then(r=>r[0]);
- $('#sp').classList.add('f');booted=true;
+ $('#sp').classList.add('f');booted=true;initNotifications();
  if(u)await enter(u);else{setMode('r');$('#au').classList.add('on')}
  await sl(950);$('#sp').classList.remove('on');
 })();
