@@ -55,6 +55,12 @@ jobs:
       - name: Senkronla
         run: npx cap sync android
 
+      - name: Surum numarasini artir
+        run: |
+          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "1.${{ github.run_number }}"/' android/app/build.gradle
+          grep -n "versionCode\|versionName" android/app/build.gradle
+
       - name: Sabit imza anahtarini yerlestir
         run: |
           mkdir -p ~/.android
