@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -24,11 +26,13 @@ jobs:
         run: |
           mkdir -p www
           cp index.html www/index.html
+          sed -i "s#__REPO__#${{ github.repository }}#; s#__BUILD__#${{ github.run_number }}#" www/index.html
+          grep -n "const APP_BUILD" www/index.html
 
       - name: Paketleri kur
         run: |
           npm install
-          npm install @capacitor/app@6 @capacitor/local-notifications@6
+          npm install @capacitor/app@6 @capacitor/local-notifications@6 @capacitor/filesystem@6 @capacitor-community/file-opener@6
 
       - name: Push bildirimi eklentisi (google-services.json varsa)
         run: |
@@ -42,7 +46,7 @@ jobs:
 
       - name: Izinleri ekle (mikrofon, kamera, bildirim)
         run: |
-          sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application#' android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <application#' android/app/src/main/AndroidManifest.xml
 
       - name: Simgeleri yerlestir
         run: |
@@ -76,3 +80,15 @@ jobs:
         with:
           name: S-Chat-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: APK adini duzenle
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk S-Chat.apk
+
+      - name: Surum yayinla (uygulama ici guncelleme icin)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: S-Chat 1.${{ github.run_number }}
+          body: "Yeni S-Chat surumu. Uygulamayi acinca guncelleme bildirimi gelir."
+          files: S-Chat.apk
+          make_latest: "true"
